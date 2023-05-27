@@ -1,7 +1,7 @@
 # 日志管理平台 ELK
 
 ## 前言
-为了拓展日志管理的范围及规范化，参考了 pfelk 开源项目，新增并修改了一些应用程序过滤规则，开源出来。本项目配合 rsyslog 与 kafaka 联动进行日志管理，整体架构如下：
+为了拓展日志管理的范围及规范化，参考了 pfelk 开源项目，新增并修改了一些应用程序过滤规则，开源出来。本项目配合 rsyslog 与 kafaka 联动进行日志管理，关联项目地址为 https://github.com/evling2020/rsyslog-kafka.git ，整体架构如下：
 
 ![kafka-log-collector.png](./images/kafka-log-collector.png)
  
