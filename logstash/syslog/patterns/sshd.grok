@@ -1,0 +1,71 @@
+# sshd grok pattern
+
+# Start/Stop
+SSHD_LISTEN         Server listening on %{IP:sshd.listen.ip} port %{NUMBER:sshd.listen.port}.
+SSHD_TERMINATE      Received signal %{NUMBER:sshd.signal}; terminating.
+
+# SSH Tunnel
+SSHD_TUNN_ERR1      error: connect_to %{IP:sshd.listen.ip} port %{NUMBER:sshd.listen.port}: failed.
+SSHD_TUNN_ERR2      error: channel_setup_fwd_listener: cannot listen to port: %{NUMBER:sshd.listen.port}
+SSHD_TUNN_ERR3      error: bind: Address already in use
+SSHD_TUNN_ERR4      error: channel_setup_fwd_listener_tcpip: cannot listen to port: %{NUMBER:sshd.listen.port}
+SSHD_TUNN_TIMEOUT   Timeout, client not responding.
+
+# Normal
+SSHD_SUCCESS_OLD        (?<sshd.result>Accepted) %{WORD:sshd.auth.type} for %{USERNAME:sshd.user} from %{IP:sshd.client.ip} port %{NUMBER:sshd.port} %{WORD:sshd.protocol}: %{GREEDYDATA:sshd.cipher}
+SSHD_SUCCESS        %{DATA:sshd.event} %{DATA:sshd.auth.type} for (invalid user )?%{DATA:sshd.user} from %{IPORHOST:sshd.client.ip} port %{NUMBER:sshd.port} ssh2(: %{WORD:sshd.cipher}%{SPACE}%{WORD:sshd.keyenc}:%{GREEDYDATA:ssh.key})?
+SSHD_DISCONNECT_OLD     Received disconnect from %{IP:sshd.client.ip} port %{NUMBER:sshd.port}:%{NUMBER:sshd.disconnect.code}: (?<sshd.disconnect.status>disconnected by user)
+SSHD_DISCONNECT     Received disconnect from %{IPORHOST:sshd.client.ip}%{GREEDYDATA}
+SSHD_DISCONNECT2    Disconnected from user %{USERNAME:sshd.user}%{SPACE}%{IP:sshd.client.ip}%{SPACE}port%{SPACE}%{INT:sshd.client.port}
+SSHD_CONN_CLOSE     Connection closed by %{IP:sshd.client.ip}$
+SSHD_SESSION_OPEN   pam_unix\(sshd:session\): session opened for user %{USERNAME:sshd.user} by \(uid=\d+\)
+SSHD_SESSION_CLOSE  pam_unix\(sshd:session\): session closed for user %{USERNAME:sshd.user}
+SSHD_SESSION_FAIL   pam_systemd\(sshd:session\): Failed to release session: (?<sshd.disconnect.status>Interrupted system call)
+SSHD_PAMAUTH        pam_unix\(sshd:auth\): authentication %{WORD:sshd.pam.auth}; logname= uid=%{INT:sshd.pam.uid} euid=%{INT:sshd.pam.euid} tty=%{WORD:sshd.tty} ruser= rhost=%{IPORHOST:sshd.pam.rhost}  user=%{USER:sshd.pam.user}
+SSHD_SFTP	    subsystem request for sftp
+SSHD_UNKNOWN_USER   pam_unix(sshd:auth): check pass; user unknown
+
+# Probe
+SSHD_REFUSE_CONN    (?<sshd_result>refused) connect from %{DATA:sshd.client.hostname} \(%{IPORHOST:sshd.client.ip}\)
+SSHD_TCPWRAP_FAIL1  warning: %{DATA:sshd.tcpd.file}, line %{NUMBER}: can't verify hostname: getaddrinfo\(%{DATA:sshd.paranoid.hostname}, %{DATA:sshd.sa.family}\) failed
+SSHD_TCPWRAP_FAIL2  warning: %{DATA:sshd.tcpd.file}, line %{NUMBER}: host name/address mismatch: %{IPORHOST:sshd.client.ip} != %{HOSTNAME:sshd.paranoid.hostname}
+SSHD_TCPWRAP_FAIL3  warning: %{DATA:sshd.tcpd.file}, line %{NUMBER}: host name/name mismatch: %{HOSTNAME:sshd.paranoid.hostname.1} != %{HOSTNAME:sshd.paranoid.hostname.2}
+SSHD_TCPWRAP_FAIL4  warning: %{DATA:sshd.tcpd.file}, line %{NUMBER}: host name/name mismatch: reverse lookup results in non-FQDN %{HOSTNAME:sshd.paranoid.hostname}
+SSHD_TCPWRAP_FAIL5  warning: can't get client address: Connection reset by peer
+SSHD_FAIL           Failed %{WORD:sshd.auth.type} for %{USERNAME:sshd.invalid.user} from %{IP:sshd.client.ip} port %{NUMBER:sshd.port} %{WORD:sshd.protocol}
+SSHD_USER_FAIL      Failed password for invalid user %{USERNAME:sshd.invalid.user} from %{IP:sshd.client.ip} port %{NUMBER:sshd.port} %{WORD:sshd.protocol}
+SSHD_INVAL_USER     Invalid user\s*%{USERNAME:sshd.invalid.user}? from %{IP:sshd.client.ip}
+
+# preauth
+SSHD_DISC_PREAUTH   Disconnected from %{IP:sshd.client.ip} port %{NUMBER:sshd.port}\s*(?:\[%{GREEDYDATA:sshd.privsep}\]|)
+SSHD_RECE_PREAUTH   (?:error: |)Received disconnect from %{IP:sshd.client.ip} port %{NUMBER:sshd.port}:%{NUMBER:sshd.disconnect.code}: %{GREEDYDATA:sshd.disconnect.status}? \[%{GREEDYDATA:sshd.privsep}\]
+SSHD_MAXE_PREAUTH   error: maximum authentication attempts exceeded for (?:invalid user |)%{USERNAME:sshd.invalid.user} from %{IP:sshd.client.ip} port %{NUMBER:sshd.port} %{WORD:sshd.protocol}\s*(?:\[%{GREEDYDATA:sshd.privsep}\]|)
+SSHD_DISR_PREAUTH   Disconnecting: %{GREEDYDATA:sshd.disconnect.status} \[%{GREEDYDATA:sshd.privsep}\]
+SSHD_INVA_PREAUTH   input_userauth_request: invalid user %{USERNAME:sshd.invalid.user}?\s*(?:\[%{GREEDYDATA:sshd.privsep}\]|)
+SSHD_REST_PREAUTH   Connection reset by %{IP:sshd.client.ip} port %{NUMBER:sshd.port}\s*(?:\[%{GREEDYDATA:sshd.privsep}\]|)
+SSHD_CLOS_PREAUTH   Connection closed by %{IP:sshd.client.ip} port %{NUMBER:sshd.port}\s*(?:\[%{GREEDYDATA:sshd.privsep}\]|)
+SSHD_FAIL_PREAUTH   fatal: Unable to negotiate with %{IP:sshd.client.ip} port %{NUMBER:sshd.port}:\s*%{GREEDYDATA:sshd.disconnect.status}? \[%{GREEDYDATA:sshd.privsep}\]
+SSHD_FAI2_PREAUTH   fatal: %{GREEDYDATA:sshd.fatal.status}: Connection from %{IP:sshd.client.ip} port %{NUMBER:sshd.port}:\s*%{GREEDYDATA:sshd.disconnect.status}? \[%{GREEDYDATA:sshd.privsep}\]
+SSHD_BADL_PREAUTH   Bad packet length %{NUMBER:sshd.packet.length}. \[%{GREEDYDATA:sshd.privsep}\]
+SSHD_PAM_MULTI      PAM %{INT:sshd.pam.retries} more authentication failures; logname= uid=%{INT:sshd.pam.uid} euid=%{INT:sshd.pam.euid} tty=%{WORD:sshd.pam.tty} ruser= rhost=%{IPORHOST:sshd.pam.rhost}  user=%{USER:sshd.pam.user}
+SSHD_PAM_AUTHFAIL   pam_unix\(sshd:auth\): authentication failure; logname%{NOTSPACE}%{SPACE}uid=%{INT:sshd.pam.uid}%{SPACE}euid=%{INT:sshd.pam.euid} tty=%{WORD:sshd.pam.tty} ruser=%{SPACE}rhost=%{IPORHOST:sshd.pam.rhost}
+
+
+# Corrupted
+SSHD_IDENT_FAIL     Did not receive identification string from %{IP:sshd.client.ip}
+SSHD_MAPB_FAIL      Address %{IP:sshd.client.ip} maps to %{HOSTNAME:sshd.client.hostname}, but this does not map back to the address - POSSIBLE BREAK-IN ATTEMPT!
+SSHD_RMAP_FAIL      reverse mapping checking getaddrinfo for %{HOSTNAME:sshd.client.hostname} \[%{IP:sshd.client.ip}\] failed - POSSIBLE BREAK-IN ATTEMPT!
+SSHD_TOOMANY_AUTH   Disconnecting: Too many authentication failures for %{USERNAME:sshd.invalid.user}
+SSHD_CORRUPT_MAC    Corrupted MAC on input
+SSHD_PACKET_CORRUPT Disconnecting: Packet corrupt
+SSHD_BAD_VERSION    Bad protocol version identification '%{GREEDYDATA}' from %{IP:sshd.client.ip}
+
+####
+SSHD_INIT       %{SSHD_LISTEN}|%{SSHD_TERMINATE}
+SSHD_TUNN       %{SSHD_TUNN_ERR1}|%{SSHD_TUNN_ERR2}|%{SSHD_TUNN_ERR3}|%{SSHD_TUNN_ERR4}|%{SSHD_TUNN_TIMEOUT}
+SSHD_NORMAL_LOG %{SSHD_SUCCESS}|%{SSHD_DISCONNECT}|%{SSHD_CONN_CLOSE}|%{SSHD_SESSION_OPEN}|%{SSHD_SESSION_CLOSE}|%{SSHD_SESSION_FAIL}|%{SSHD_PAMAUTH}|%{SSHD_SFTP}|%{SSHD_DISCONNECT2}
+SSHD_PROBE_LOG  %{SSHD_REFUSE_CONN}|%{SSHD_TCPWRAP_FAIL1}|%{SSHD_TCPWRAP_FAIL2}|%{SSHD_TCPWRAP_FAIL3}|%{SSHD_TCPWRAP_FAIL4}|%{SSHD_TCPWRAP_FAIL5}|%{SSHD_FAIL}|%{SSHD_USER_FAIL}|%{SSHD_INVAL_USER}
+SSHD_PREAUTH    %{SSHD_DISC_PREAUTH}|%{SSHD_RECE_PREAUTH}|%{SSHD_MAXE_PREAUTH}|%{SSHD_DISR_PREAUTH}|%{SSHD_INVA_PREAUTH}|%{SSHD_REST_PREAUTH}|%{SSHD_FAIL_PREAUTH}|%{SSHD_CLOS_PREAUTH}|%{SSHD_FAI2_PREAUTH}|%{SSHD_BADL_PREAUTH}|%{SSHD_PAM_MULTI}|%{SSHD_PAM_AUTHFAIL}
+SSHD_CORRUPTED  %{SSHD_IDENT_FAIL}|%{SSHD_MAPB_FAIL}|%{SSHD_RMAP_FAIL}|%{SSHD_TOOMANY_AUTH}|%{SSHD_CORRUPT_MAC}|%{SSHD_PACKET_CORRUPT}|%{SSHD_BAD_VERSION}
+# All
+SSHD_LOG        %{SSHD_INIT}|%{SSHD_NORMAL_LOG}|%{SSHD_PROBE_LOG}|%{SSHD_CORRUPTED}|%{SSHD_TUNN}|%{SSHD_PREAUTH}|%{SSHD_UNKNOWN_USER}

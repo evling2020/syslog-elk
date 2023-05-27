@@ -1,0 +1,32 @@
+# 36-ports-desc.syslog
+################################################################################
+# Version: 22.04                                                               #
+# Required: No - Optional                                                      #
+# Description: Checks for the presense of the port field, if present runs      #
+# translates the port into a referenced description.                           #
+################################################################################
+#
+filter {
+  if "firewall" in [tags] {
+    if [destination][port] {
+      translate {
+        source => "[destination][port]"
+        target => "[destination][service]"
+        dictionary_path => "/etc/syslog/databases/service-names-port-numbers.csv"
+        refresh_interval => 300
+        refresh_behaviour => replace
+        #fallback => "%{[destination][port]}"
+      }
+    }
+    if [source][port] {
+      translate {
+        source => "[source][port]"
+        target => "[source][service]"
+        dictionary_path => "/etc/syslog/databases/service-names-port-numbers.csv"
+        refresh_interval => 300
+        refresh_behaviour => replace
+        #fallback => "%{[source][port]}"
+      }
+    }
+  }
+}

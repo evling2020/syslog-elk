@@ -1,0 +1,396 @@
+# 05-apps.syslog
+################################################################################
+# Version: 23.03                                                               #
+# Required: Yes                                                                #
+# Description: Parses events based on process.name and further enriches events #
+#                                                                              #
+################################################################################
+#
+filter {
+  ### captive portal ###
+  # Rename pfSense captive portal log from logportalauth to captiveportal
+  if [log][syslog][appname] =~ /^logportalauth/ {
+    mutate {
+      replace => { "[log][syslog][appname]" => "captiveportal" }
+    }
+  }
+  if [log][syslog][appname] =~ /^captiveportal/ {
+    mutate {
+      add_tag => "captive" 
+      add_field => { "[ecs][version]" => "1.7.0" }
+      add_field => { "[event][dataset]" => "syslog.captive" }
+      rename => { "filter_message" => "captiveportalmessage" }
+    }
+    grok {
+      patterns_dir => [ "/etc/syslog/patterns" ]
+      match => [ "captiveportalmessage", "%{CAPTIVEPORTAL}" ]
+    }
+  }
+  ### dhcpd ###
+  if [log][syslog][appname] =~ /^dhcpd$/ {
+    mutate {
+      add_tag => [ "dhcp", "dhcpdv4" ]
+      add_field => { "[event][dataset]" => "syslog.dhcp" }
+      replace => { "[log][syslog][appname]" => "dhcp" }
+    }
+    grok {
+      patterns_dir => [ "/etc/syslog/patterns" ]
+      match => [ "filter_message", "%{DHCPD}"]
+    }
+  }
+  ### dpinger ###
+  if [log][syslog][appname] =~ /^dpinger/ {
+    mutate {
+      add_tag => "dpinger"
+      add_field => { "[event][dataset]" => "syslog.dpinger" }
+    }
+  }
+  ### filterlog ###
+  if [log][syslog][appname] =~ /^filterlog$/ {
+    mutate {
+      add_tag => "firewall"
+      add_field => { "[ecs][version]" => "1.7.0" }
+      add_field => { "[event][dataset]" => "syslog.firewall" }
+      replace => { "[log][syslog][appname]" => "firewall" }
+    }
+    grok {
+      patterns_dir => [ "/etc/syslog/patterns" ]
+      match => [ "filter_message", "%{PF_LOG_ENTRY}" ]
+    }
+    if [network][direction] =~ /^out$/ {
+      mutate {
+        rename => { "[pf][transport][data_length]" => "[destination][bytes]" }
+      }
+    }
+    if [network][direction] =~ /^in$/ {
+      mutate {
+        rename => { "[pf][transport][data_length]" => "[source][bytes]" }
+      }
+    }
+  }
+  ### haproxy ###
+  if [log][syslog][appname] =~ /^haproxy/ {
+    mutate {
+      add_tag => "haproxy"
+      add_field => { "[event][dataset]" => "syslog.haproxy" }
+    }
+    grok {
+      patterns_dir => [ "/etc/syslog/patterns" ]
+      match => [ "filter_message", "%{HAPROXY}" ]
+    }
+  }
+  ### nginx ###
+  if [log][syslog][appname] =~ /^nginx$/ {
+    mutate {
+      add_field => { "[event][dataset]" => "syslog.nginx" }
+      replace => { "[log][syslog][appname]" => "nginx" }
+      gsub => ["filter_message", "\\x", "\\\x"]
+      gsub => ["filter_message", ":-,", ":0,"]
+      gsub => ["filter_message", ": -,", ": 0,"]
+      gsub => ["filter_message", ": -}", ": 0}"]
+    }
+    if [filter_message] =~ /^{.*}$/ {
+      json {
+        source => "filter_message"
+        add_tag => "nginx_json"
+      }
+    }
+    if "nginx_json" not in [tags] {
+      grok {
+        patterns_dir => [ "/etc/syslog/patterns" ]
+        match => { "filter_message" => "%{NGINX}" }
+      }
+    }
+  ### squid ECS => Built-in SIEM JSON ###
+    if "nginx_json" in [tags] {
+      grok {
+        match => [ "request", "%{WORD:[nginx][access][method]}\s*%{NOTSPACE:[nginx][access][url]}\s*HTTP/%{NUMBER:[nginx][access][http_version]}" ]
+        #match => [ "upstream_addr", "(%{IP:[nginx][ingress_controller][upstream][ip]}:%{INT:[nginx][ingress_controller][upstream][port]})|(-)|(%{NOTSPACE:[nginx][ingress_controller][upstream][socket]})" ]
+      }
+      mutate {
+        rename => { "remote_addr" => "[client][ip]" }
+        rename => { "remote_user" => "[nginx][access][user_name]" }
+        rename => { "status" => "[nginx][access][response_code]" }
+        rename => { "body_bytes_sent" => "[nginx][access][body_sent][bytes]" }
+        rename => { "http_referer" => "[nginx][access][referrer]" }
+        rename => { "http_user_agent" => "[nginx][access][agent]" }
+        rename => { "http_x_forwarded_for" => "[nginx][access][forwarder]" }
+        rename => { "server_name" => "[nginx][ingress_controller][upstream][name]" }
+        rename => { "request_time" => "[nginx][ingress_controller][http][request][time]" }
+        rename => { "upstream_addr" => "[nginx][ingress_controller][upstream][response][addr]" }
+        rename => { "upstream_status" => "[nginx][ingress_controller][upstream][response][status_code]" }
+        rename => { "upstream_response_time" => "[nginx][ingress_controller][upstream][response][time]" }
+        rename => { "upstream_response_length" => "[nginx][ingress_controller][upstream][response][length]" }
+        remove_field => ["request"]
+        #add_field => { "[event][created]" => "%{timestamp}" }
+        #rename => { "timestamp" => "[event][created]" }
+      }
+    }
+    mutate {
+      remove_tag => "nginx_json"
+      add_tag => "nginx"
+    }
+  }
+  ### openvpn ###
+  if [log][syslog][appname] =~ /^openvpn/ {
+    mutate {
+      add_tag => "openvpn"
+      add_field => { "[event][dataset]" => "syslog.openvpn" }
+    }
+    grok {
+     match => [ "filter_message", "((?<timestamp>%{YEAR}-%{MONTHNUM}-%{MONTHDAY}\s%{TIME})\s)*%{GREEDYDATA:tmp_msg}" ] 
+    }
+    if [tmp_msg] {
+      mutate {
+        rename => { "tmp_msg" => "filter_message" }
+      }
+      ruby {
+        code => "
+          event.set('timestamp', event.get('[timestamp]') + ' ' + '+0800')
+        "
+      }
+    }
+    grok {
+      patterns_dir => [ "/etc/syslog/patterns" ]
+      match => [ "filter_message", "%{OPENVPN}" ]
+    }
+    if [openvpn_message] {
+      grok {
+        patterns_dir => [ "/etc/syslog/patterns" ]
+        match => [ "openvpn_message", "%{OPENVPN_RAW}" ]
+      }
+    }
+  }
+  ### named ###
+  if [log][syslog][appname] =~ /^named/ {
+    mutate {
+      add_tag => "bind9"
+      add_field => { "[event][dataset]" => "syslog.bind9" }
+    }
+    grok {
+     #patterns_dir => [ "/etc/syslog/patterns" ]
+     match => [ "filter_message", "%{BIND9}" ]
+    }
+  }
+  ### ntpd ###
+  if [log][syslog][appname] =~ /^ntpd/ {
+    mutate {
+      add_tag => "ntpd"
+      add_field => { "[event][dataset]" => "syslog.ntpd" }
+    }
+  }
+  ### php-fpm ###
+  if [log][syslog][appname] =~ /^php-fpm/ {
+    mutate {
+      add_tag => "web_portal"
+      add_field => { "[event][dataset]" => "syslog.webportal" }
+    }
+    grok {
+      patterns_dir => [ "/etc/syslog/patterns" ]
+      match => { "filter_message" => "%{PF_APP} %{PF_APP_DATA}" }
+    }
+    mutate {
+      lowercase => [ "[pf][app][action]" ]
+    }
+  }
+  ### snort ###
+  if [log][syslog][appname] =~ /^snort/ {
+    mutate {
+      add_tag => "snort"
+      add_field => { "[ecs][version]" => "1.7.0" }
+      add_field => { "[event][dataset]" => "syslog.snort" }
+      add_field => { "[event][category]" => "intrusion_detection" }
+      add_field => { "[agent][type]" => "snort" }
+    }
+    grok {
+      patterns_dir => [ "/etc/syslog/patterns" ]
+      match => [ "filter_message", "%{SNORT}" ]
+    }
+  }
+  ### suricata ###
+  if [log][syslog][appname] =~ /^suricata$/ {
+    if [filter_message] =~ /^{.*}$/ {
+      json {
+        source => "filter_message"
+        target => "[suricata][eve]"
+        add_tag => "suricata_json"
+      }
+    }
+    if [suricata][eve][src_ip] and ![source][ip] {
+      mutate {
+        add_field => { "[source][ip]" => "%{[suricata][eve][src_ip]}" }
+      }
+    }
+    if [suricata][eve][dest_ip] and ![destination][ip] {
+      mutate {
+        add_field => { "[destination][ip]" => "%{[suricata][eve][dest_ip]}" }
+      }
+    }
+    if [suricata][eve][src_port] and ![source][port] {
+      mutate {
+        add_field => { "[source][port]" => "%{[suricata][eve][src_port]}" }
+      }
+    }
+    if [suricata][eve][dest_port] and ![destination][port] {
+      mutate {
+        add_field => { "[destination][port]" => "%{[suricata][eve][dest_port]}" }
+        add_field => { "[threatintel][indicator][ip]" => "%{[source][ip]} %{[suricata][eve][http][url]}" }
+      }
+    }
+    if "suricata_json" not in [tags] {
+      grok {
+        patterns_dir => [ "/etc/syslog/patterns" ]
+        match => [ "filter_message", "%{SURICATA}" ]
+      }
+    }
+    mutate {
+      remove_tag => "suricata_json"
+      add_tag => "suricata"
+      add_field => { "[event][dataset]" => "syslog.suricata" }
+    }
+  }
+  ### squid ###
+  if [log][syslog][appname] == "(squid-1)" {
+    mutate {
+      replace => [ "[log][syslog][appname]", "squid" ]
+      add_field => { "[event][dataset]" => "syslog.squid" }
+    }
+    if [filter_message] =~ /^{.*}$/ {
+      json {
+        source => "filter_message"
+        add_tag => "squid_json"
+      }
+    }
+    if "squid_json" not in [tags] {
+      grok {
+        patterns_dir => [ "/etc/syslog/patterns" ]
+        match => [ "filter_message", "%{SQUID}" ]
+      }  
+    }    
+  ### squid ECS => Built-in SIEM JSON ###
+    if "squid_json" in [tags] {
+      grok {
+        match => [ "[url][original]", "%{URIPROTO}://%{URIHOST:referer_domain}%{GREEDYDATA:[url][path]}" ]
+      }
+      mutate {
+        rename => { "[http][response][body][status_code]" => "[http][response][status_code]" }
+        rename => { "referer_domain" => "[url][domain]" }
+      }
+    }
+    mutate {
+      remove_tag => "squid_json"
+      add_tag => "squid"
+    }
+  }
+  ### unbound ###
+  if [log][syslog][appname] =~ /^unbound/ {
+    mutate {
+      add_tag => "unbound"
+      add_field => { "[ecs][version]" => "1.9.0" }
+      add_field => { "[event][dataset]" => "syslog.unbound" }
+    }
+    grok {
+      patterns_dir => [ "/etc/syslog/patterns" ]
+      match => [ "filter_message", "%{UNBOUND}" ]
+    }
+  ### unbound ECS => Built-in SIEM ###
+    grok { 
+      match => [ "[dns][question][name]", "(\.)?(?<[dns][question][registered_domain]>[^.]+\.[^.]+)$" ] 
+      add_tag => "unbound-registered_domain"
+    }
+    if "unbound-registered_domain" not in [tags] {
+      grok { 
+        match => [ "[dns][question][name]", "(?<[dns][question][registered_domain]>[^.]+\.[^.]+)$" ] 
+      }
+    }
+    grok {
+      match => [ "[dns][question][name]", "(\.)?(?<[dns][question][tld]>[^.]+)$" ]
+    }
+
+    mutate {
+      remove_tag => "unbound-registered_domain"
+    }
+  }
+  ### sshd ###
+  if [log][syslog][appname] =~ /^sshd$/ {
+    mutate {
+      add_tag => "sshd"
+      add_field => { "[event][dataset]" => "syslog.sshd" }
+      convert => {
+          "sshd.signal" => "integer"
+          "sshd.port" => "integer"
+          "sshd.listen.port" => "integer"
+        }
+    }
+    grok {
+      patterns_dir => [ "/etc/syslog/patterns" ]
+      match => [ "filter_message", "%{SSHD_LOG}" ]
+    }
+  }
+  ### modsec ###
+  if [log][syslog][appname] =~ /^modsec$/ {
+    if [filter_message] =~ /^{.*}$/ {
+      json {
+        source => "filter_message"
+        add_tag => "modsec_json"
+      }
+    }
+    #split {
+    #        field => "[transaction][messages]"
+    #    }
+    if [transaction][request][headers][CF-Connecting-IP] {
+      mutate {
+        add_field => { "attacker_ip" => "%{[transaction][request][headers][CF-Connecting-IP]}" }
+      }
+    }
+    if [transaction][client_ip] and ![attacker_ip] {
+      mutate {
+        add_field => { "attacker_ip" => "%{[transaction][client_ip]}" }
+      }
+    }
+    if [attacker_ip] and ![source][ip] {
+      mutate {
+        add_field => { "[source][ip]" => "%{[attacker_ip]}" }
+      }
+    }
+    #if [attacker_ip] and ![destination][ip] {
+    #  mutate {
+    #    add_field => { "[destination][ip]" => "%{[attacker_ip]}" }
+    #  }
+    #}
+
+    # Delete not matched rules messages
+    #if [transaction][messages][message] == "" {
+    #  drop {}
+    #} else {
+      # Delete anomaly score checks and internal messages
+    #  if [transaction][messages][details][data] == "" {
+    #    drop {}
+    #  } else {
+    #    mutate {
+    #      add_field => {
+    #        "alertmessage" => "%{[transaction][messages][message]}"
+    #      }
+    #      add_field => {
+    #        "alertdata" => "%{[transaction][messages][details][data]}"
+    #      }
+    #      remove_field => [ "[transaction][messages]" ]
+    #    }
+    #  }
+    #}
+    ruby {
+      code => "
+        event.set('timestamp', event.get('[transaction][time_stamp]') + ' ' + '+0800')
+      "
+    }
+    mutate {
+      remove_tag => "modsec_json"
+      add_tag => "modsec"
+      #add_field => { "timestamp" => "%{[transaction][time_stamp]}"}
+      add_field => { "[event][dataset]" => "syslog.modsec" }
+      replace => { "[log][syslog][appname]" => "modsec" }
+      gsub => ["filter_message", "\\x", "\\\x"]
+      gsub => ["filter_message", ":-,", ":0,"]
+    }
+  }
+}

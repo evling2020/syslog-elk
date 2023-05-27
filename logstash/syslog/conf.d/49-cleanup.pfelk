@@ -1,0 +1,19 @@
+# 49-cleanup.syslog
+################################################################################
+# Version: 23.03                                                               #
+# Required: No - Optional                                                      #
+# Description: Removed unwanted logs based on the process.pid field and        #
+# additional fields. Additionally, pf.tcp.options is split (multiple values)   #
+################################################################################
+#
+# Update as needed to remove unwanted logs based on the process.pid field
+filter {
+#  if [process][pid] in ["78", "46", "45", "43"] {
+#	drop { }
+#  }
+  mutate {
+    remove_field => ["filter_message", "syslog"]
+    split => { "[pf][tcp][options]" => ";" }
+    rename => { "message" => "[event][original]" }
+  }
+}

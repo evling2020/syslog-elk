@@ -1,0 +1,67 @@
+# 50-outputs.pfelk
+################################################################################
+# Version: 23.01(datastream)                                                   #
+# Required: Yes                                                                #
+# Description: Sends enriched logs to Elasticsearch.                           #
+#                                                                              #
+################################################################################
+#
+filter {
+  if [log][syslog][appname] == "captiveportal" {
+    mutate { add_field => { "[data_stream][namespace]" => "captiveportal" } }
+  } else if [log][syslog][appname] == "dhcp" {
+    mutate { add_field => { "[data_stream][namespace]" => "dhcp" } }
+  } else if [log][syslog][appname] == "firewall" {
+    mutate { add_field => { "[data_stream][namespace]" => "firewall" } }
+  } else if "bind9" in [tags] or "dpinger" in [tags] or "ntpd" in [tags] or "web_portal" in [tags] {
+    mutate { add_field => { "[data_stream][namespace]" => "firewall_processes" } }
+  } else if [log][syslog][appname] == "haproxy" {
+    mutate { add_field => { "[data_stream][namespace]" => "haproxy" } }
+  } else if [log][syslog][appname] == "nginx" {
+    mutate { add_field => { "[data_stream][namespace]" => "nginx" } }
+  } else if [log][syslog][appname] == "openvpn" {
+    mutate { add_field => { "[data_stream][namespace]" => "openvpn" } }
+  } else if [log][syslog][appname] == "unbound" {
+    mutate { add_field => { "[data_stream][namespace]" => "unbound" } }
+  } else if [log][syslog][appname] == "suricata" {
+    mutate { add_field => { "[data_stream][namespace]" => "suricata" } }
+  } else if [log][syslog][appname] == "snort" {
+    mutate { add_field => { "[data_stream][namespace]" => "snort" } }
+  } else if [log][syslog][appname] == "squid" {
+    mutate { add_field => { "[data_stream][namespace]" => "squid" } }
+  } else if [log][syslog][appname] == "sshd" {
+    mutate { add_field => { "[data_stream][namespace]" => "sshd" } }
+  } else if [log][syslog][appname] == "modsec" {
+    mutate { add_field => { "[data_stream][namespace]" => "modsec" } }
+  } else {
+    mutate { add_field => { "[data_stream][namespace]" => "unknown" } }
+  }
+  #mutate { 
+    
+  #}
+  if [timestamp] {
+    date {
+      match => [ "[timestamp]", "EEE MMM  d HH:mm:ss yyyy Z", "EEE MMM dd HH:mm:ss yyyy Z", "yyyy-MM-dd HH:mm:ss Z",  "MMM  d HH:mm:ss", "MMM dd HH:mm:ss", "dd/MMM/yyyy:HH:mm:ss Z", "ISO8601" ]
+      target => "@timestamp"
+    }
+    mutate {
+      remove_field => ["timestamp"]
+    }
+  } else {
+    date {
+      match => [ "[event][created]", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss", "ISO8601" ]
+      target => "@timestamp"
+    }
+  }
+}
+output {
+  elasticsearch {
+    data_stream => "true"
+    data_stream_type => "logs"
+    data_stream_dataset => "syslog"
+    hosts => ["http://elasticsearch:9200"]
+    user => "elastic"
+    password => "JS8NtQ"
+  }
+}
+

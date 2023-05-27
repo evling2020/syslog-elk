@@ -1,0 +1,29 @@
+---
+## Default Elasticsearch configuration from Elasticsearch base image.
+## https://github.com/elastic/elasticsearch/blob/main/distribution/docker/src/docker/config/elasticsearch.yml
+#
+cluster.name: "docker-cluster"
+network.host: 0.0.0.0
+
+## X-Pack settings
+## see https://www.elastic.co/guide/en/elasticsearch/reference/current/security-settings.html
+#
+xpack.license.self_generated.type: basic
+xpack.security.enabled: true
+xpack.monitoring.collection.enabled: true
+
+
+
+# 缓存回收大小，无默认值
+# 有了这个设置，最久未使用（LRU）的 fielddata 会被回收为新数据腾出空间
+# 控制fielddata允许内存大小，达到HEAP 20% 自动清理旧cache
+indices.fielddata.cache.size: 20%
+indices.breaker.total.use_real_memory: false
+# fielddata 断路器默认设置堆的 60% 作为 fielddata 大小的上限。
+indices.breaker.fielddata.limit: 40%
+# request 断路器估算需要完成其他请求部分的结构大小，例如创建一个聚合桶，默认限制是堆内存的 40%。
+indices.breaker.request.limit: 40%
+# total 揉合 request 和 fielddata 断路器保证两者组合起来不会使用超过堆内存的 70%(默认值)。
+indices.breaker.total.limit: 95%
+
+search.max_async_search_response_size: 50mb
